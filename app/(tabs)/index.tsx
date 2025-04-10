@@ -258,7 +258,7 @@ export default function Dashboard() {
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (isActive && !isPaused && remainingTime > 0 && currentPouchId) {
+    if (isActive && !isPaused && currentPouchId) {
       interval = setInterval(() => {
         // Fetch the current pouch to get the start time and pause information
         try {
@@ -288,12 +288,12 @@ export default function Dashboard() {
               const elapsedSeconds = Math.floor((now - startTime) / 1000) - pauseDuration;
               
               // Calculate remaining time
-              const newRemainingTime = Math.max(0, duration - elapsedSeconds);
+              const newRemainingTime = duration - elapsedSeconds;
               
               setRemainingTime(newRemainingTime);
               
               // Handle timer completion
-              if (newRemainingTime <= 0) {
+              if (newRemainingTime <= 0 && !isActive) {
                 // Schedule notification when timer ends
                 if (Platform.OS !== 'web') {
                   Notifications.scheduleNotificationAsync({
@@ -316,7 +316,7 @@ export default function Dashboard() {
     }
 
     return () => clearInterval(interval);
-  }, [isActive, isPaused, currentPouchId, duration, remainingTime]);
+  }, [isActive, isPaused, currentPouchId, duration]);
 
   const handleError = (error: PostgrestError | Error) => {
     setError(error instanceof Error ? error.message : 'An error occurred');
@@ -504,7 +504,7 @@ export default function Dashboard() {
                     style={styles.finishEarlyButton}
                     onPress={handleStop}
                   >
-                    <Text style={styles.finishEarlyText}>Finish Early</Text>
+                    <Text style={styles.finishEarlyText}>End Pouch</Text>
                   </Pressable>
                 </View>
               )}

@@ -19,15 +19,37 @@ export function HorizontalProgress({
   remainingTime,
 }: HorizontalProgressProps) {
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
+    const minutes = Math.floor(Math.abs(seconds) / 60);
+    const remainingSeconds = Math.abs(seconds) % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  // Calculate the time that has passed since the timer reached 0
+  const timePassedSinceExpired = remainingTime <= 0 ? Math.abs(remainingTime) : 0;
+  
+  // Determine if the timer has expired
+  const isExpired = remainingTime <= 0;
+  
+  // Set the display time (counts up if expired)
+  const displayTime = isExpired ? timePassedSinceExpired : remainingTime;
+  
+  // Set the text to show
+  const statusText = isExpired ? 'overtime' : 'remaining';
+
   return (
     <View style={styles.container}>
-      <Text style={styles.timeText}>{formatTime(remainingTime)}</Text>
-      <Text style={styles.remainingText}>remaining</Text>
+      <Text style={[
+        styles.timeText, 
+        isExpired && styles.expiredTimeText
+      ]}>
+        {formatTime(displayTime)}
+      </Text>
+      <Text style={[
+        styles.remainingText,
+        isExpired && styles.expiredRemainingText
+      ]}>
+        {statusText}
+      </Text>
       <View style={styles.progressContainer}>
         <View 
           style={[
@@ -71,11 +93,17 @@ const styles = StyleSheet.create({
     color: '#00A3A3',
     marginBottom: 4,
   },
+  expiredTimeText: {
+    color: '#ef4444', // Red color for expired timer
+  },
   remainingText: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
     color: '#999',
     marginBottom: 20,
+  },
+  expiredRemainingText: {
+    color: '#ef4444', // Red color for expired text
   },
   progressContainer: {
     width: '100%',

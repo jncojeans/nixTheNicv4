@@ -64,16 +64,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 24,
+    fontSize: 20,
     color: '#666',
     fontFamily: 'Inter-SemiBold',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   timerContainer: {
     width: '100%',
     backgroundColor: '#F0F0F3',
     borderRadius: 20,
-    padding: 20,
+    padding: 16,
     alignItems: 'center',
     ...Platform.select({
       ios: {
@@ -91,26 +91,26 @@ const styles = StyleSheet.create({
     }),
   },
   timerText: {
-    fontSize: 48,
+    fontSize: 36,
     color: '#00A3A3',
     fontFamily: 'Inter-SemiBold',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   progressContainer: {
     width: '100%',
-    height: 8,
+    height: 6,
     backgroundColor: '#E0E0E3',
-    borderRadius: 4,
+    borderRadius: 3,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   progressBar: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 3,
     backgroundColor: '#00A3A3',
   },
   remainingText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#999',
     fontFamily: 'Inter-Regular',
   },

@@ -1,4 +1,4 @@
-import { StyleSheet, TextInput, View, Text, Platform } from 'react-native';
+import { StyleSheet, TextInput, View, Text, Platform, KeyboardTypeOptions } from 'react-native';
 import { GlassContainer } from './GlassContainer';
 
 type CustomInputProps = {
@@ -7,6 +7,7 @@ type CustomInputProps = {
   onChangeText: (text: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
+  keyboardType?: KeyboardTypeOptions;
 };
 
 export function CustomInput({ 
@@ -14,8 +15,15 @@ export function CustomInput({
   value, 
   onChangeText, 
   placeholder, 
-  secureTextEntry 
+  secureTextEntry,
+  keyboardType = 'default'
 }: CustomInputProps) {
+  const handleChangeText = (text: string) => {
+    if (typeof onChangeText === 'function') {
+      onChangeText(text);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -23,10 +31,11 @@ export function CustomInput({
         <TextInput
           style={styles.input}
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={handleChangeText}
           placeholder={placeholder}
           placeholderTextColor="rgba(255, 255, 255, 0.5)"
           secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
         />
       </GlassContainer>
     </View>
@@ -50,7 +59,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
+    width: '100%',
     ...(Platform.OS === 'web' ? {
+      outlineStyle: 'none',
+      backgroundColor: 'transparent',
+      border: 'none',
     } : {}),
   },
 });
