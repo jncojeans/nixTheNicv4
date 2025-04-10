@@ -165,18 +165,52 @@ export default function Dashboard() {
       setTimeBetweenPouches(scheduleData.time_between_pouches);
       setTargetPouches(scheduleData.pouches_allowed);
 
-      const { data: pouches, error: pouchesError } = await supabase
+      // Check for active pouches (without an end time)
+      const { data: activePouches, error: activePouchesError } = await supabase
         .from('pouches')
         .select('*')
         .eq('user_id', user.id)
-        .eq('is_active', false)
-        .not('end_time', 'is', null)
-        .order('end_time', { ascending: false })
+        .eq('is_active', true)
+        .is('end_time', null)
+        .order('start_time', { ascending: false })
         .limit(1);
 
-      if (pouchesError) throw pouchesError;
-      if (pouches && pouches.length > 0 && pouches[0].end_time) {
-        setLastPouchEndTime(pouches[0].end_time);
+      if (activePouchesError) throw activePouchesError;
+      
+      // If we have an active pouch, set the state to show the active pouch UI
+      if (activePouches && activePouches.length > 0) {
+        const activePouch = activePouches[0];
+        setCurrentPouchId(activePouch.id);
+        setIsActive(true);
+        setIsPaused(activePouch.paused_at !== null);
+        
+        // Calculate remaining time for the active pouch
+        const now = new Date().getTime();
+        const startTime = new Date(activePouch.start_time).getTime();
+        const pauseDuration = activePouch.total_pause_duration ? 
+          parseInt(activePouch.total_pause_duration.replace(' seconds', '')) : 0;
+        
+        // Calculate elapsed time in seconds, accounting for pauses
+        const elapsedSeconds = Math.floor((now - startTime) / 1000) - pauseDuration;
+        
+        // Calculate remaining time
+        const newRemainingTime = Math.max(0, durationInSeconds - elapsedSeconds);
+        setRemainingTime(newRemainingTime);
+      } else {
+        // Check for the most recent completed pouch to show time since last pouch
+        const { data: pouches, error: pouchesError } = await supabase
+          .from('pouches')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', false)
+          .not('end_time', 'is', null)
+          .order('end_time', { ascending: false })
+          .limit(1);
+
+        if (pouchesError) throw pouchesError;
+        if (pouches && pouches.length > 0 && pouches[0].end_time) {
+          setLastPouchEndTime(pouches[0].end_time);
+        }
       }
 
       const { data: todaysPouches, error: todaysPouchesError } = await supabase
