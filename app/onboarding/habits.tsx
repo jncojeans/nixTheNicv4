@@ -4,17 +4,15 @@ import {
   View, 
   Text, 
   TouchableOpacity, 
-  ImageBackground, 
   Platform, 
   KeyboardAvoidingView, 
   ScrollView,
   Keyboard,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  TextInput
 } from 'react-native';
 import { router } from 'expo-router';
 import { useFonts, Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
-import { GlassContainer } from '@/components/GlassContainer';
-import { CustomInput } from '@/components/CustomInput';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '@/lib/supabase';
@@ -86,13 +84,21 @@ export default function Habits() {
     }
   };
 
-  const handleTimeChange = (setter: (date: Date) => void) => (event: any, selectedDate?: Date) => {
-    if (Platform.OS !== 'web') {
-      setShowFirstPouchPicker(false);
-      setShowLastPouchPicker(false);
-    }
+  const handleFirstPouchTimeChange = (event: any, selectedDate?: Date) => {
+    // Always hide the picker after selection
+    setShowFirstPouchPicker(false);
+    
     if (selectedDate) {
-      setter(selectedDate);
+      setFirstPouchTime(selectedDate);
+    }
+  };
+
+  const handleLastPouchTimeChange = (event: any, selectedDate?: Date) => {
+    // Always hide the picker after selection
+    setShowLastPouchPicker(false);
+    
+    if (selectedDate) {
+      setLastPouchTime(selectedDate);
     }
   };
 
@@ -112,172 +118,187 @@ export default function Habits() {
   };
 
   return (
-    <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=3270&auto=format&fit=crop' }}
+    <KeyboardAvoidingView
       style={styles.background}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <View style={styles.overlay} />
-      
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingContainer}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-      >
-        <TouchableWithoutFeedback onPress={dismissKeyboard}>
-          <ScrollView 
-            contentContainerStyle={styles.scrollContainer}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.container}>
-              <GlassContainer style={styles.formContainer}>
-                <Text style={styles.title}>Current Habits</Text>
-                <Text style={styles.subtitle}>Help us understand your current usage</Text>
-                
-                {error && (
-                  <Text style={styles.errorText}>{error}</Text>
-                )}
-                
-                <CustomInput
-                  label="Pouch MGs"
-                  value={pouchMgs}
-                  onChangeText={setPouchMgs}
-                  placeholder="Enter MGs per pouch"
-                  keyboardType="numeric"
-                />
+      <TouchableWithoutFeedback onPress={dismissKeyboard}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.container}>
+            <View style={styles.contentContainer}>
+              <Text style={styles.title}>Current Habits</Text>
+              <Text style={styles.subtitle}>Help us understand your current usage</Text>
+              
+              {error && (
+                <Text style={styles.errorText}>{error}</Text>
+              )}
+              
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Pouch MGs</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={pouchMgs}
+                    onChangeText={setPouchMgs}
+                    placeholder="Enter MGs per pouch"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
 
-                <View style={styles.timeContainer}>
-                  <Text style={styles.label}>First Pouch of the Day</Text>
-                  {Platform.OS === 'web' ? (
-                    <GlassContainer style={styles.timeInputContainer}>
-                      <input
-                        type="time"
-                        value={firstPouchTime.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)}
-                        onChange={(e) => setFirstPouchTime(new Date(`2000-01-01T${e.target.value}`))}
-                        style={{
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          color: '#fff',
-                          fontSize: 16,
-                          fontFamily: 'Inter-Regular',
-                          width: '100%',
-                          outline: 'none',
-                        }}
-                      />
-                    </GlassContainer>
-                  ) : (
-                    <>
+              <View style={styles.timeContainer}>
+                <Text style={styles.label}>First Pouch of the Day</Text>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.timeInputContainer}>
+                    <input
+                      type="time"
+                      value={firstPouchTime.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)}
+                      onChange={(e) => setFirstPouchTime(new Date(`2000-01-01T${e.target.value}`))}
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: '#333',
+                        fontSize: 16,
+                        fontFamily: 'Inter-Regular',
+                        width: '100%',
+                        outline: 'none',
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    {!showFirstPouchPicker ? (
                       <TouchableOpacity onPress={() => setShowFirstPouchPicker(true)}>
-                        <GlassContainer style={styles.timeInputContainer}>
+                        <View style={styles.timeInputContainer}>
                           <Text style={styles.timeText}>
                             {firstPouchTime.toLocaleTimeString()}
                           </Text>
-                        </GlassContainer>
+                        </View>
                       </TouchableOpacity>
-                      {showFirstPouchPicker && (
-                        <DateTimePicker
-                          value={firstPouchTime}
-                          mode="time"
-                          display="default"
-                          onChange={handleTimeChange(setFirstPouchTime)}
-                        />
-                      )}
-                    </>
-                  )}
-                </View>
-
-                <CustomInput
-                  label="Pouches per Day"
-                  value={pouchesPerDay}
-                  onChangeText={setPouchesPerDay}
-                  placeholder="Enter number of pouches"
-                  keyboardType="numeric"
-                />
-
-                <CustomInput
-                  label="Duration per Pouch (minutes)"
-                  value={durationPerPouch}
-                  onChangeText={setDurationPerPouch}
-                  placeholder="Enter duration"
-                  keyboardType="numeric"
-                />
-
-                <CustomInput
-                  label="Time Between Pouches (minutes)"
-                  value={timeBetweenPouches}
-                  onChangeText={setTimeBetweenPouches}
-                  placeholder="Enter time"
-                  keyboardType="numeric"
-                />
-
-                <View style={styles.timeContainer}>
-                  <Text style={styles.label}>Last Pouch of the Day</Text>
-                  {Platform.OS === 'web' ? (
-                    <GlassContainer style={styles.timeInputContainer}>
-                      <input
-                        type="time"
-                        value={lastPouchTime.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)}
-                        onChange={(e) => setLastPouchTime(new Date(`2000-01-01T${e.target.value}`))}
-                        style={{
-                          backgroundColor: 'transparent',
-                          border: 'none',
-                          color: '#fff',
-                          fontSize: 16,
-                          fontFamily: 'Inter-Regular',
-                          width: '100%',
-                          outline: 'none',
-                        }}
+                    ) : (
+                      <DateTimePicker
+                        value={firstPouchTime}
+                        mode="time"
+                        display="spinner"
+                        onChange={handleFirstPouchTimeChange}
+                        textColor="#333"
                       />
-                    </GlassContainer>
-                  ) : (
-                    <>
+                    )}
+                  </>
+                )}
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Pouches per Day</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={pouchesPerDay}
+                    onChangeText={setPouchesPerDay}
+                    placeholder="Enter number of pouches"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Duration per Pouch (minutes)</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={durationPerPouch}
+                    onChangeText={setDurationPerPouch}
+                    placeholder="Enter duration"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputWrapper}>
+                <Text style={styles.label}>Time Between Pouches (minutes)</Text>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={timeBetweenPouches}
+                    onChangeText={setTimeBetweenPouches}
+                    placeholder="Enter time between pouches"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              <View style={styles.timeContainer}>
+                <Text style={styles.label}>Last Pouch of the Day</Text>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.timeInputContainer}>
+                    <input
+                      type="time"
+                      value={lastPouchTime.toLocaleTimeString('en-US', { hour12: false }).slice(0, 5)}
+                      onChange={(e) => setLastPouchTime(new Date(`2000-01-01T${e.target.value}`))}
+                      style={{
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        color: '#333',
+                        fontSize: 16,
+                        fontFamily: 'Inter-Regular',
+                        width: '100%',
+                        outline: 'none',
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    {!showLastPouchPicker ? (
                       <TouchableOpacity onPress={() => setShowLastPouchPicker(true)}>
-                        <GlassContainer style={styles.timeInputContainer}>
+                        <View style={styles.timeInputContainer}>
                           <Text style={styles.timeText}>
                             {lastPouchTime.toLocaleTimeString()}
                           </Text>
-                        </GlassContainer>
+                        </View>
                       </TouchableOpacity>
-                      {showLastPouchPicker && (
-                        <DateTimePicker
-                          value={lastPouchTime}
-                          mode="time"
-                          display="default"
-                          onChange={handleTimeChange(setLastPouchTime)}
-                        />
-                      )}
-                    </>
-                  )}
-                </View>
-                
-                <TouchableOpacity 
-                  style={[styles.button, !isFormValid() && styles.buttonDisabled]} 
-                  onPress={handleSaveHabits}
-                  disabled={!isFormValid()}
-                >
-                  <Text style={styles.buttonText}>
-                    {loading ? 'Saving...' : 'Continue'}
-                  </Text>
-                </TouchableOpacity>
-              </GlassContainer>
+                    ) : (
+                      <DateTimePicker
+                        value={lastPouchTime}
+                        mode="time"
+                        display="spinner"
+                        onChange={handleLastPouchTimeChange}
+                        textColor="#333"
+                      />
+                    )}
+                  </>
+                )}
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.button, !isFormValid() && styles.buttonDisabled]} 
+                onPress={handleSaveHabits}
+                disabled={!isFormValid()}
+              >
+                <Text style={styles.buttonText}>
+                  {loading ? 'Saving...' : 'Continue'}
+                </Text>
+              </TouchableOpacity>
             </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </ImageBackground>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  keyboardAvoidingContainer: {
-    flex: 1,
+    backgroundColor: '#F0F0F3',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -285,65 +306,148 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+    justifyContent: 'center',
   },
-  formContainer: {
+  contentContainer: {
     width: '100%',
     maxWidth: 500,
+    alignSelf: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F3',
+    borderRadius: 30,
     padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 10, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '10px 10px 20px #D1D9E6, -10px -10px 20px #FFFFFF',
+      }
+    }),
   },
   title: {
     fontSize: 28,
-    color: '#fff',
+    color: '#666',
     textAlign: 'center',
     fontFamily: 'Inter-SemiBold',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#666',
     textAlign: 'center',
     fontFamily: 'Inter-Regular',
     marginBottom: 24,
   },
+  inputWrapper: {
+    marginBottom: 16,
+    width: '100%',
+  },
   timeContainer: {
     marginBottom: 16,
+    width: '100%',
   },
   label: {
-    color: '#fff',
+    color: '#666',
     marginBottom: 8,
     fontFamily: 'Inter-Regular',
     fontSize: 14,
   },
+  inputContainer: {
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: 'inset 2px 2px 5px #D1D9E6, inset -2px -2px 5px #FFFFFF',
+      }
+    }),
+  },
   timeInputContainer: {
-    padding: Platform.OS === 'web' ? 12 : 8,
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: 'inset 2px 2px 5px #D1D9E6, inset -2px -2px 5px #FFFFFF',
+      }
+    }),
+  },
+  input: {
+    color: '#333',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    width: '100%',
+    ...(Platform.OS === 'web' ? {
+      outlineStyle: 'none',
+      backgroundColor: 'transparent',
+      border: 'none',
+    } : {}),
   },
   timeText: {
-    color: '#fff',
+    color: '#333',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
   },
   button: {
-    backgroundColor: '#6C63FF',
+    backgroundColor: '#F0F0F3',
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 20,
     alignItems: 'center',
+    width: '100%',
     marginTop: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 10, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '10px 10px 20px #D1D9E6, -10px -10px 20px #FFFFFF',
+      }
+    }),
   },
   buttonDisabled: {
-    backgroundColor: 'rgba(108, 99, 255, 0.5)',
+    opacity: 0.5,
   },
   buttonText: {
-    color: '#fff',
+    color: '#00A3A3',
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
   },
   errorText: {
-    color: '#FF6B6B',
-    textAlign: 'center',
+    color: '#ef4444',
     marginBottom: 16,
     fontFamily: 'Inter-Regular',
+    textAlign: 'center',
   },
 });

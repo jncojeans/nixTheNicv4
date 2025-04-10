@@ -1,19 +1,146 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ImageBackground, Platform, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { 
+  StyleSheet, 
+  View, 
+  Text, 
+  TouchableOpacity, 
+  Platform, 
+  KeyboardAvoidingView, 
+  ScrollView,
+  TextInput,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Modal,
+  FlatList
+} from 'react-native';
 import { router } from 'expo-router';
 import { useFonts, Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
-import { GlassContainer } from '@/components/GlassContainer';
-import { CustomSelect } from '@/components/CustomSelect';
-import { CustomInput } from '@/components/CustomInput';
-import { TimezoneSelect } from '@/components/TimezoneSelect';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as SplashScreen from 'expo-splash-screen';
 import { supabase } from '@/lib/supabase';
+
+// Common timezones that work across all platforms
+const commonTimezones = [
+  { label: 'Pacific/Honolulu (Hawaii)', value: 'Pacific/Honolulu' },
+  { label: 'America/Anchorage (Alaska)', value: 'America/Anchorage' },
+  { label: 'America/Los_Angeles (Pacific Time)', value: 'America/Los_Angeles' },
+  { label: 'America/Phoenix (Arizona)', value: 'America/Phoenix' },
+  { label: 'America/Denver (Mountain Time)', value: 'America/Denver' },
+  { label: 'America/Chicago (Central Time)', value: 'America/Chicago' },
+  { label: 'America/New_York (Eastern Time)', value: 'America/New_York' },
+  { label: 'America/Halifax (Atlantic Time)', value: 'America/Halifax' },
+  { label: 'America/St_Johns (Newfoundland)', value: 'America/St_Johns' },
+  { label: 'Europe/London (GMT/UTC)', value: 'Europe/London' },
+  { label: 'Europe/Paris (Central European Time)', value: 'Europe/Paris' },
+  { label: 'Europe/Helsinki (Eastern European Time)', value: 'Europe/Helsinki' },
+  { label: 'Asia/Dubai (Gulf Standard Time)', value: 'Asia/Dubai' },
+  { label: 'Asia/Kolkata (India)', value: 'Asia/Kolkata' },
+  { label: 'Asia/Singapore (Singapore)', value: 'Asia/Singapore' },
+  { label: 'Asia/Tokyo (Japan)', value: 'Asia/Tokyo' },
+  { label: 'Australia/Sydney (Eastern Australia)', value: 'Australia/Sydney' },
+  { label: 'Pacific/Auckland (New Zealand)', value: 'Pacific/Auckland' },
+];
 
 const goalOptions = [
   { label: 'Quit', value: 'quit' },
   { label: 'Control my habit', value: 'control' },
 ];
+
+// Neumorphic Dropdown Component
+type NeumorphicDropdownProps = {
+  label: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  options: { label: string; value: string }[];
+  placeholder?: string;
+};
+
+function NeumorphicDropdown({ 
+  label, 
+  value, 
+  onValueChange, 
+  options,
+  placeholder = 'Select an option'
+}: NeumorphicDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find(option => option.value === value);
+
+  const toggleDropdown = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const handleSelect = (selectedValue: string) => {
+    onValueChange(selectedValue);
+    setIsOpen(false);
+  };
+
+  return (
+    <View style={styles.dropdownContainer}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity 
+        style={styles.dropdownButton} 
+        onPress={toggleDropdown}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.dropdownButtonText}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </Text>
+      </TouchableOpacity>
+
+      {Platform.OS === 'web' ? (
+        isOpen && (
+          <View style={styles.dropdownListContainer}>
+            {options.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={styles.dropdownItem}
+                onPress={() => handleSelect(option.value)}
+              >
+                <Text style={[
+                  styles.dropdownItemText,
+                  option.value === value && styles.dropdownItemTextSelected
+                ]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )
+      ) : (
+        <Modal
+          visible={isOpen}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setIsOpen(false)}
+        >
+          <TouchableWithoutFeedback onPress={() => setIsOpen(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <FlatList
+                  data={options}
+                  keyExtractor={(item) => item.value}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleSelect(item.value)}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        item.value === value && styles.dropdownItemTextSelected
+                      ]}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
+    </View>
+  );
+}
 
 export default function Goal() {
   const [goalType, setGoalType] = useState('');
@@ -128,35 +255,33 @@ export default function Goal() {
   };
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS !== 'web') {
-      setShowDatePicker(false);
-    }
+    // Always hide the picker after selection on mobile
+    setShowDatePicker(false);
+    
     if (selectedDate) {
       setTargetDate(selectedDate);
     }
   };
 
   const showDatePickerModal = () => {
-    if (Platform.OS !== 'web') {
-      setShowDatePicker(true);
-    }
+    setShowDatePicker(true);
   };
 
   const isFormValid = goalType && timezone && (goalType !== 'control' || (pouchesPerDay && parseInt(pouchesPerDay) > 0));
 
   return (
-    <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=3272&auto=format&fit=crop' }}
+    <KeyboardAvoidingView 
       style={styles.background}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
-      <View style={styles.overlay} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.container}>
-            <GlassContainer style={styles.formContainer}>
+            <View style={styles.contentContainer}>
               <Text style={styles.title}>Set Your Goal</Text>
               <Text style={styles.subtitle}>Let's establish your journey's destination</Text>
               
@@ -164,23 +289,24 @@ export default function Goal() {
                 <Text style={styles.errorText}>{error}</Text>
               )}
               
-              <CustomSelect
-                label="What is your Goal?"
+              <NeumorphicDropdown
+                label="What is your goal?"
                 value={goalType}
                 onValueChange={handleGoalTypeChange}
                 options={goalOptions}
+                placeholder="Select your goal"
               />
               
               <View style={styles.dateContainer}>
                 <Text style={styles.label}>When will you achieve your goal?</Text>
                 {Platform.OS === 'web' ? (
-                  <GlassContainer style={styles.dateInputContainer}>
+                  <View style={styles.dateInputContainer}>
                     <input
                       type="date"
                       value={targetDate.toISOString().split('T')[0]}
                       onChange={(e) => setTargetDate(new Date(e.target.value))}
                       style={{
-                        color: '#fff',
+                        color: '#666',
                         fontSize: 16,
                         fontFamily: 'Inter-Regular',
                         backgroundColor: 'transparent',
@@ -190,139 +316,317 @@ export default function Goal() {
                       }}
                       min={new Date().toISOString().split('T')[0]}
                     />
-                  </GlassContainer>
+                  </View>
                 ) : (
                   <>
-                    <TouchableOpacity onPress={showDatePickerModal}>
-                      <GlassContainer style={styles.dateInputContainer}>
-                        <Text style={styles.dateText}>
-                          {targetDate.toLocaleDateString()}
-                        </Text>
-                      </GlassContainer>
-                    </TouchableOpacity>
-                    {showDatePicker && (
+                    {!showDatePicker ? (
+                      <TouchableOpacity onPress={showDatePickerModal}>
+                        <View style={styles.dateInputContainer}>
+                          <Text style={styles.dateText}>
+                            {targetDate.toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
                       <DateTimePicker
                         value={targetDate}
                         mode="date"
-                        display="default"
+                        display="spinner"
                         onChange={handleDateChange}
                         minimumDate={new Date()}
+                        textColor="#333"
                       />
                     )}
                   </>
                 )}
               </View>
               
-              <TimezoneSelect
+              <NeumorphicDropdown
+                label="Your timezone"
                 value={timezone}
                 onValueChange={handleTimezoneChange}
+                options={commonTimezones}
+                placeholder="Select your timezone"
               />
               
               {goalType === 'control' && (
-                <CustomInput
-                  label="Pouches per day"
-                  value={pouchesPerDay}
-                  onChangeText={handlePouchesPerDayChange}
-                  placeholder="Enter number of pouches"
-                  keyboardType="numeric"
-                />
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.label}>Pouches per Day</Text>
+                  <View style={styles.inputContainer}>
+                    <TextInput
+                      style={styles.input}
+                      value={pouchesPerDay}
+                      onChangeText={handlePouchesPerDayChange}
+                      placeholder="Enter number of pouches"
+                      placeholderTextColor="#999"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
               )}
               
               <TouchableOpacity 
-                style={[
-                  styles.button,
-                  !isFormValid && styles.buttonDisabled
-                ]} 
+                style={[styles.button, !isFormValid && styles.buttonDisabled]} 
                 onPress={handleSaveGoal}
-                disabled={!isFormValid || loading}
+                disabled={!isFormValid}
               >
                 <Text style={styles.buttonText}>
                   {loading ? 'Saving...' : 'Continue'}
                 </Text>
               </TouchableOpacity>
-            </GlassContainer>
+            </View>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </ImageBackground>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  keyboardAvoidingView: {
-    flex: 1,
+    backgroundColor: '#F0F0F3',
   },
   scrollContainer: {
     flexGrow: 1,
   },
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+    justifyContent: 'center',
+    minHeight: '100%',
   },
-  formContainer: {
+  contentContainer: {
     width: '100%',
     maxWidth: 500,
+    alignSelf: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F3',
+    borderRadius: 30,
     padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 10, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '10px 10px 20px #D1D9E6, -10px -10px 20px #FFFFFF',
+      }
+    }),
   },
   title: {
     fontSize: 24,
     fontFamily: 'Inter-SemiBold',
-    color: '#fff',
+    color: '#666',
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
     fontFamily: 'Inter-Regular',
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#666',
     marginBottom: 24,
     textAlign: 'center',
   },
   dateContainer: {
     marginBottom: 16,
+    width: '100%',
+  },
+  inputWrapper: {
+    marginBottom: 16,
+    width: '100%',
   },
   label: {
-    color: '#fff',
+    color: '#666',
     marginBottom: 8,
     fontFamily: 'Inter-Regular',
     fontSize: 14,
   },
   dateInputContainer: {
-    padding: Platform.OS === 'web' ? 12 : 8,
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: 'inset 2px 2px 5px #D1D9E6, inset -2px -2px 5px #FFFFFF',
+      }
+    }),
+  },
+  inputContainer: {
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: 'inset 2px 2px 5px #D1D9E6, inset -2px -2px 5px #FFFFFF',
+      }
+    }),
+  },
+  input: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    width: '100%',
+    ...(Platform.OS === 'web' ? {
+      outlineStyle: 'none',
+      backgroundColor: 'transparent',
+      border: 'none',
+    } : {}),
   },
   dateText: {
-    color: '#fff',
+    color: '#333',
     fontSize: 16,
     fontFamily: 'Inter-Regular',
   },
   button: {
-    backgroundColor: '#6C63FF',
-    borderRadius: 8,
+    backgroundColor: '#F0F0F3',
     padding: 16,
+    borderRadius: 20,
     alignItems: 'center',
+    width: '100%',
     marginTop: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 10, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '10px 10px 20px #D1D9E6, -10px -10px 20px #FFFFFF',
+      }
+    }),
   },
   buttonDisabled: {
-    backgroundColor: 'rgba(108, 99, 255, 0.5)',
+    opacity: 0.5,
   },
   buttonText: {
-    color: '#fff',
+    color: '#00A3A3',
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
   },
   errorText: {
-    color: '#FF6B6B',
+    color: '#ef4444',
     marginBottom: 16,
     fontFamily: 'Inter-Regular',
     textAlign: 'center',
+  },
+  // Dropdown styles
+  dropdownContainer: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  dropdownButton: {
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    padding: 16,
+    justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: 'inset 2px 2px 5px #D1D9E6, inset -2px -2px 5px #FFFFFF',
+      }
+    }),
+  },
+  dropdownButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+  },
+  dropdownListContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#F0F0F3',
+    borderRadius: 12,
+    marginTop: 8,
+    zIndex: 1000,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 5, height: 5 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '5px 5px 10px #D1D9E6, -5px -5px 10px #FFFFFF',
+      }
+    }),
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    maxHeight: '70%',
+    backgroundColor: '#F0F0F3',
+    borderRadius: 20,
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 10, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  dropdownItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  dropdownItemText: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+  },
+  dropdownItemTextSelected: {
+    color: '#00A3A3',
+    fontFamily: 'Inter-SemiBold',
   },
 });
