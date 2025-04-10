@@ -11,6 +11,7 @@ import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { supabase } from '@/lib/supabase';
 import { PostgrestError } from '@supabase/supabase-js';
+import { startPouchActivity, updatePouchActivity, endPouchActivity } from '@/lib/liveActivities';
 
 const BACKGROUND_FETCH_TASK = 'background-fetch';
 
@@ -318,6 +319,26 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [isActive, isPaused, currentPouchId, duration]);
 
+  useEffect(() => {
+    const updateLiveActivity = async () => {
+      if (Platform.OS !== 'ios' || !isActive || !currentPouchId) return;
+      
+      try {
+        if (remainingTime <= 0) {
+          // End the Live Activity if timer has expired
+          await endPouchActivity(currentPouchId);
+        } else {
+          // Start or update the Live Activity
+          await updatePouchActivity(currentPouchId, duration, remainingTime);
+        }
+      } catch (error) {
+        console.error('Error updating Live Activity:', error);
+      }
+    };
+    
+    updateLiveActivity();
+  }, [remainingTime, isActive, currentPouchId, duration]);
+
   const handleError = (error: PostgrestError | Error) => {
     setError(error instanceof Error ? error.message : 'An error occurred');
     setLoading(false);
@@ -347,6 +368,11 @@ export default function Dashboard() {
 
       setCurrentPouchId(pouch.id);
       setPouchCount(prev => prev + 1);
+      
+      // Start Live Activity on iOS
+      if (Platform.OS === 'ios') {
+        startPouchActivity(pouch.id, duration, duration);
+      }
     } catch (err) {
       handleError(err as Error | PostgrestError);
       return;
@@ -426,6 +452,11 @@ export default function Dashboard() {
         if (pouchError) throw pouchError;
         if (pouch?.end_time) {
           setLastPouchEndTime(pouch.end_time);
+        }
+        
+        // End Live Activity on iOS
+        if (Platform.OS === 'ios') {
+          endPouchActivity(currentPouchId);
         }
       } catch (err) {
         handleError(err as Error | PostgrestError);

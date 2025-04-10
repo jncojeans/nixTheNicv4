@@ -17,7 +17,8 @@
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
-        ]
+        ],
+        "NSSupportsLiveActivities": true
       },
       "associatedDomains": [],
       "config": {
@@ -55,7 +56,8 @@
         {
           "netCacheDirectory": "net_cache"
         }
-      ]
+      ],
+      "./plugins/withLiveActivities.js"
     ],
     "experiments": {
       "typedRoutes": true
