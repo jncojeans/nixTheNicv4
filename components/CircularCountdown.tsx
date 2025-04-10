@@ -1,6 +1,6 @@
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { StyleSheet, View, Text, useWindowDimensions, Platform } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useEffect, useState } from 'react';
 
 type TimeUnit = {
   value: number;
@@ -17,15 +17,41 @@ export function CircularCountdown({ quitDate }: CircularCountdownProps) {
   const { width } = useWindowDimensions();
   
   const isSmallScreen = width < 768;
-  const containerPadding = 20;
-  const gap = 16;
-  const availableWidth = Math.min(width - (containerPadding * 2), 800);
-  const ringSize = (availableWidth - (gap * 3)) / 4;
-
-  useEffect(() => {
-    const interval = setInterval(() => {
+  
+  // Memoize dimension calculations to prevent recalculation on every render
+  const dimensions = useMemo(() => {
+    const containerPadding = 20;
+    const gap = 16;
+    const availableWidth = Math.min(width - (containerPadding * 2), 800);
+    // Apply a size reduction factor to make circles smaller (0.85 = 85% of original size)
+    const sizeReductionFactor = 0.85;
+    const ringSize = ((availableWidth - (gap * 3)) / 4) * sizeReductionFactor;
+    
+    return {
+      containerPadding,
+      gap,
+      availableWidth,
+      ringSize
+    };
+  }, [width]);
+  
+  // Memoize the calculation function to prevent recreation on every render
+  const calculateTimeUnits = useCallback(() => {
+    try {
       const now = new Date().getTime();
       const quit = new Date(quitDate).getTime();
+      
+      // Handle case where quit date is in the past
+      if (quit <= now) {
+        setTimeUnits([
+          { value: 0, label: 'Days', total: 1 },
+          { value: 0, label: 'Hours', total: 24 },
+          { value: 0, label: 'Min.', total: 60 },
+          { value: 0, label: 'Sec.', total: 60 },
+        ]);
+        return;
+      }
+      
       const distance = quit - now;
 
       const days = Math.floor(distance / (1000 * 60 * 60 * 24));
@@ -33,62 +59,107 @@ export function CircularCountdown({ quitDate }: CircularCountdownProps) {
       const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((distance % (1000 * 60)) / 1000);
 
-      const totalDays = Math.ceil((quit - new Date(quitDate).getTime()) / (1000 * 60 * 60 * 24));
+      // Calculate total days only once
+      const totalDays = Math.max(1, Math.ceil((quit - new Date(quitDate).getTime()) / (1000 * 60 * 60 * 24)));
 
       setTimeUnits([
-        { value: days, label: 'Days Left', total: totalDays },
+        { value: days, label: 'Days', total: totalDays },
         { value: hours, label: 'Hours', total: 24 },
-        { value: minutes, label: 'Minutes', total: 60 },
-        { value: seconds, label: 'Seconds', total: 60 },
+        { value: minutes, label: 'Min.', total: 60 },
+        { value: seconds, label: 'Sec.', total: 60 },
       ]);
+    } catch (error) {
+      console.error('Error calculating time units:', error);
+      // Set default values in case of error
+      setTimeUnits([
+        { value: 0, label: 'Days', total: 1 },
+        { value: 0, label: 'Hours', total: 24 },
+        { value: 0, label: 'Min.', total: 60 },
+        { value: 0, label: 'Sec.', total: 60 },
+      ]);
+    }
+  }, [quitDate]);
+
+  useEffect(() => {
+    // Calculate immediately on mount
+    calculateTimeUnits();
+    
+    // Use requestAnimationFrame for better performance on web
+    let animationFrameId: number | null = null;
+    let lastUpdateTime = Date.now();
+    
+    // Set up interval with a slightly longer duration to reduce CPU usage
+    const interval = setInterval(() => {
+      if (Platform.OS === 'web') {
+        // On web, use requestAnimationFrame for smoother updates
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+        
+        animationFrameId = requestAnimationFrame(() => {
+          // Only update if at least 1 second has passed
+          const now = Date.now();
+          if (now - lastUpdateTime >= 1000) {
+            calculateTimeUnits();
+            lastUpdateTime = now;
+          }
+        });
+      } else {
+        // On native, just use the interval
+        calculateTimeUnits();
+      }
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [quitDate]);
+    return () => {
+      clearInterval(interval);
+      if (animationFrameId && Platform.OS === 'web') {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [calculateTimeUnits]);
+
+  // Memoize the CountdownRing components to prevent unnecessary re-renders
+  const countdownRings = useMemo(() => {
+    return timeUnits.map((unit, index) => (
+      <View key={unit.label} style={[
+        styles.ringWrapper,
+        { marginRight: index < 3 ? dimensions.gap : 0, width: dimensions.ringSize }
+      ]}>
+        <CountdownRing
+          size={dimensions.ringSize}
+          strokeWidth={dimensions.ringSize * 0.1}
+          progress={unit.value / unit.total}
+          value={unit.value}
+        />
+        <Text style={styles.labelText}>{unit.label}</Text>
+      </View>
+    ));
+  }, [timeUnits, dimensions]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.subtitle}>Time until you're nicotine free</Text>
+      <Text style={styles.subtitle}>Time to nicotine free</Text>
       <View style={[
         styles.ringsContainer,
         { flexDirection: 'row' }
       ]}>
-        {timeUnits.map((unit, index) => (
-          <CountdownRing
-            key={unit.label}
-            size={ringSize}
-            strokeWidth={ringSize * 0.1}
-            progress={unit.value / unit.total}
-            value={unit.value}
-            label={unit.label}
-            style={{ marginRight: index < 3 ? gap : 0 }}
-          />
-        ))}
+        {countdownRings}
       </View>
     </View>
   );
 }
 
-type CountdownRingProps = {
-  size: number;
-  strokeWidth: number;
-  progress: number;
-  value: number;
-  label: string;
-  style?: any;
-};
-
-function CountdownRing({ 
+// Memoize the CountdownRing component to prevent unnecessary re-renders
+const CountdownRing = React.memo(({ 
   size, 
   strokeWidth, 
   progress, 
   value, 
-  label,
   style
-}: CountdownRingProps) {
+}: CountdownRingProps) => {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
-  const progressOffset = circumference - (progress * circumference);
+  const progressOffset = circumference - (Math.max(0, Math.min(1, progress)) * circumference);
 
   return (
     <View style={[{ width: size, height: size }, style]}>
@@ -116,13 +187,20 @@ function CountdownRing({
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <View style={[styles.textContainer, { width: size, height: size }]}>
+      <View style={[styles.valueContainer, { width: size, height: size }]}>
         <Text style={[styles.valueText, { fontSize: size * 0.25 }]}>{value}</Text>
-        <Text style={[styles.labelText, { fontSize: size * 0.12 }]}>{label}</Text>
       </View>
     </View>
   );
-}
+});
+
+type CountdownRingProps = {
+  size: number;
+  strokeWidth: number;
+  progress: number;
+  value: number;
+  style?: any;
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -158,7 +236,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'nowrap',
   },
-  textContainer: {
+  ringWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  valueContainer: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
@@ -170,6 +252,9 @@ const styles = StyleSheet.create({
   labelText: {
     color: '#666',
     fontFamily: 'Inter-Regular',
-    marginTop: 4,
+    marginTop: 8,
+    fontSize: 14,
+    textAlign: 'center',
+    width: '100%',
   },
 });
