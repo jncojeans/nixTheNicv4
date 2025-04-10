@@ -15,13 +15,30 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "standalone-ios": {
+      "distribution": "store",
+      "ios": {
+        "simulator": false,
+        "resourceClass": "m-medium",
+        "buildConfiguration": "Release",
+        "image": "latest"
+      },
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuZXBpcWl5bG1jZGtmcGpnZWtuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTI2MDg0NTUsImV4cCI6MjAyODE4NDQ1NX0.6STybz-WqHs59vQKh3w8lbvDdHQB5oBZg0QLj6NZ_fc",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dnepiqiylmcdkfpjgekn.supabase.co"
+      },
+      "cache": {
+        "key": "eas-build-ios-cache-v1"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
         "appleId": "kevsjolinsched@gmail.com",
-        "ascAppId": "6475963217",
+        "ascAppId": "6744085303",
         "appleTeamId": "KKUW8X6QXT"
       }
     }
