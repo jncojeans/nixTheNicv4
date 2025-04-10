@@ -167,12 +167,9 @@ export default function Dashboard() {
 
       const { data: pouches, error: pouchesError } = await supabase
         .from('pouches')
-        .select('id, end_time')
         .select('*')
-        .match({
-          user_id: user.id,
-          is_active: false
-        })
+        .eq('user_id', user.id)
+        .eq('is_active', false)
         .not('end_time', 'is', null)
         .order('end_time', { ascending: false })
         .limit(1);
@@ -227,30 +224,65 @@ export default function Dashboard() {
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (isActive && !isPaused && remainingTime > 0) {
+    if (isActive && !isPaused && remainingTime > 0 && currentPouchId) {
       interval = setInterval(() => {
-        setRemainingTime((time) => {
-          if (time <= 1) {
-            // Schedule notification when timer ends
-            if (Platform.OS !== 'web') {
-              Notifications.scheduleNotificationAsync({
-                content: {
-                  title: 'Pouch Timer Complete',
-                  body: 'Your pouch timer has finished!',
-                  sound: true,
-                },
-                trigger: null, // Send immediately
-              });
-            }
-            handleStop();
-          }
-          return time - 1;
-        });
+        // Fetch the current pouch to get the start time and pause information
+        try {
+          supabase
+            .from('pouches')
+            .select('start_time, total_pause_duration')
+            .eq('id', currentPouchId)
+            .single()
+            .then(({ data: pouch, error }) => {
+              if (error) {
+                // Handle error silently without console.error which might cause issues
+                return;
+              }
+              
+              if (!pouch) {
+                // If pouch doesn't exist, stop the timer
+                handleStop();
+                return;
+              }
+
+              const now = new Date().getTime();
+              const startTime = new Date(pouch.start_time).getTime();
+              const pauseDuration = pouch.total_pause_duration ? 
+                parseInt(pouch.total_pause_duration.replace(' seconds', '')) : 0;
+              
+              // Calculate elapsed time in seconds, accounting for pauses
+              const elapsedSeconds = Math.floor((now - startTime) / 1000) - pauseDuration;
+              
+              // Calculate remaining time
+              const newRemainingTime = Math.max(0, duration - elapsedSeconds);
+              
+              setRemainingTime(newRemainingTime);
+              
+              // Handle timer completion
+              if (newRemainingTime <= 0) {
+                // Schedule notification when timer ends
+                if (Platform.OS !== 'web') {
+                  Notifications.scheduleNotificationAsync({
+                    content: {
+                      title: 'Pouch Timer Complete',
+                      body: 'Your pouch timer has finished!',
+                      sound: true,
+                    },
+                    trigger: null, // Send immediately
+                  });
+                }
+                handleStop();
+              }
+            });
+        } catch (err) {
+          // Catch any unexpected errors and handle them silently
+          // This ensures the app doesn't crash if there's an issue with the database
+        }
       }, 1000);
     }
 
     return () => clearInterval(interval);
-  }, [isActive, isPaused]);
+  }, [isActive, isPaused, currentPouchId, duration, remainingTime]);
 
   const handleError = (error: PostgrestError | Error) => {
     setError(error instanceof Error ? error.message : 'An error occurred');
