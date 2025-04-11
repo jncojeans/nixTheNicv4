@@ -12,8 +12,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kickthenic.app",
-      "buildNumber": "24",
+      "buildNumber": "31",
       "appleTeamId": "KKUW8X6QXT",
+      "jsEngine": "hermes",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",
@@ -68,10 +69,15 @@
               "type": "widget-extension",
               "bundleId": "com.kickthenic.app.PouchWidgetExtension",
               "entitlements": {
-                "com.apple.security.application-groups": ["group.com.kickthenic.app"]
+                "com.apple.security.application-groups": [
+                  "group.com.kickthenic.app"
+                ]
               },
               "deploymentTarget": "16.2",
-              "frameworks": ["SwiftUI", "ActivityKit"]
+              "frameworks": [
+                "SwiftUI",
+                "ActivityKit"
+              ]
             }
           ]
         }

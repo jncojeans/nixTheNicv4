@@ -36,11 +36,27 @@
     "free-ios": {
       "distribution": "store",
       "ios": {
-        "resourceClass": "m1-medium",
+        "resourceClass": "default",
         "buildConfiguration": "Release"
       },
       "cache": {
         "key": "eas-build-ios-cache-v1"
+      }
+    },
+    "stable-ios": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "default",
+        "buildConfiguration": "Release",
+        "image": "latest"
+      },
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "HERMES_BYTECODE_VERSION": "0",
+        "HERMES_ENABLE_DEBUGGER": "0"
+      },
+      "cache": {
+        "key": "eas-build-ios-cache-v2"
       }
     },
     "local-ios": {
@@ -49,13 +65,32 @@
         "simulator": false,
         "buildConfiguration": "Release"
       },
-      "credentialsSource": "local"
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "HERMES_BYTECODE_VERSION": "0",
+        "HERMES_ENABLE_DEBUGGER": "0"
+      }
     },
     "xcode-archive": {
       "distribution": "internal",
       "ios": {
         "simulator": false,
         "buildConfiguration": "Release"
+      },
+      "credentialsSource": "local"
+    },
+    "no-cost-ios": {
+      "extends": "production",
+      "distribution": "store",
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "prebuildCommand": "echo 'Building locally to avoid Expo costs'",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_USE_METRO_WORKSPACE_ROOT": "1",
+        "HERMES_BYTECODE_VERSION": "0",
+        "HERMES_ENABLE_DEBUGGER": "0"
       }
     }
   },
