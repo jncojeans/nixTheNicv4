@@ -90,6 +90,62 @@ export default function Dashboard() {
     'Inter-SemiBold': Inter_600SemiBold,
   });
 
+  // Function to schedule a notification for when the timer will end
+  const scheduleTimerEndNotification = async (pouchId: string, durationMinutes: number) => {
+    if (Platform.OS === 'web') return;
+    
+    try {
+      // Request permissions if needed
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        const { status: newStatus } = await Notifications.requestPermissionsAsync();
+        if (newStatus !== 'granted') {
+          console.log('Notification permission denied');
+          return;
+        }
+      }
+      
+      // Cancel any existing notifications for this pouch
+      await cancelPouchNotifications(pouchId);
+      
+      // Schedule the notification to trigger at the exact end time
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Pouch Timer Complete',
+          body: 'Your pouch timer has finished!',
+          sound: true,
+          data: { pouchId }
+        },
+        trigger: durationMinutes > 0 ? { seconds: durationMinutes * 60, channelId: 'pouch-timer' } : null,
+      });
+      
+      console.log(`Scheduled notification ${notificationId} for pouch ${pouchId}`);
+      return notificationId;
+    } catch (error) {
+      console.error('Failed to schedule notification:', error);
+    }
+  };
+  
+  // Function to cancel notifications for a specific pouch
+  const cancelPouchNotifications = async (pouchId: string) => {
+    if (Platform.OS === 'web') return;
+    
+    try {
+      // Get all scheduled notifications
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      
+      // Find and cancel notifications for this pouch
+      for (const notification of scheduledNotifications) {
+        if (notification.content.data?.pouchId === pouchId) {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+          console.log(`Cancelled notification ${notification.identifier} for pouch ${pouchId}`);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to cancel notifications:', error);
+    }
+  };
+
   // Register background fetch task
   useEffect(() => {
     const registerBackgroundFetch = async () => {
@@ -125,6 +181,55 @@ export default function Dashboard() {
       }
     };
   }, [backgroundTaskRegistered]);
+
+  // Check for expired pouches when the component mounts
+  useEffect(() => {
+    const checkForExpiredPouches = async () => {
+      if (Platform.OS === 'web') return;
+      
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const { data: activePouches } = await supabase
+          .from('pouches')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .is('end_time', null);
+          
+        if (activePouches?.length) {
+          for (const pouch of activePouches) {
+            const startTime = new Date(pouch.start_time).getTime();
+            const pauseDuration = pouch.total_pause_duration ? 
+              parseInt(pouch.total_pause_duration.replace(' seconds', '')) : 0;
+            const targetDurationMs = pouch.target_duration * 60 * 1000;
+            const expectedEndTime = startTime + targetDurationMs + (pauseDuration * 1000);
+            
+            // If the pouch should have ended but hasn't been marked as ended
+            if (Date.now() >= expectedEndTime) {
+              await supabase
+                .from('pouches')
+                .update({
+                  end_time: new Date().toISOString(),
+                  is_active: false,
+                  paused_at: null
+                })
+                .eq('id', pouch.id);
+                
+              // Schedule notification for this completed pouch
+              await scheduleTimerEndNotification(pouch.id, 0); // 0 minutes means send immediately
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking for expired pouches:', error);
+      }
+    };
+    
+    // Run this check when the component mounts
+    checkForExpiredPouches();
+  }, []);
 
   const fetchHabits = useCallback(async () => {
     try {
@@ -326,10 +431,10 @@ export default function Dashboard() {
       try {
         if (remainingTime <= 0) {
           // End the Live Activity if timer has expired
-          await endPouchActivity(currentPouchId);
+          await endPouchActivity(currentPouchId, true);
         } else {
-          // Start or update the Live Activity
-          await updatePouchActivity(currentPouchId, duration, remainingTime);
+          // Update the Live Activity with remaining time
+          await updatePouchActivity(currentPouchId, remainingTime, false);
         }
       } catch (error) {
         console.error('Error updating Live Activity:', error);
@@ -337,7 +442,7 @@ export default function Dashboard() {
     };
     
     updateLiveActivity();
-  }, [remainingTime, isActive, currentPouchId, duration]);
+  }, [remainingTime, isActive, currentPouchId]);
 
   const handleError = (error: PostgrestError | Error) => {
     setError(error instanceof Error ? error.message : 'An error occurred');
@@ -348,17 +453,42 @@ export default function Dashboard() {
     return <View style={styles.background} />;
   }
 
+  // Start a new pouch timer
   const handleStart = async () => {
     try {
+      setError(null);
+      
+      if (!duration) {
+        setError('Please set a duration first');
+        return;
+      }
+      
+      // Request notification permissions if needed
+      if (Platform.OS !== 'web') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== 'granted') {
+          setError('Permission to send notifications was denied');
+          return;
+        }
+      }
+      
+      setIsActive(true);
+      setIsPaused(false);
+      
+      const startTime = new Date().toISOString();
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
 
+      // Create a new pouch in the database
       const { data: pouch, error: pouchError } = await supabase
         .from('pouches')
         .insert({
           user_id: user.id,
-          target_duration: duration / 60, // Convert seconds to minutes
+          start_time: startTime,
+          target_duration: duration,
           is_active: true,
+          total_pause_duration: '0 seconds'
         })
         .select()
         .single();
@@ -369,17 +499,19 @@ export default function Dashboard() {
       setCurrentPouchId(pouch.id);
       setPouchCount(prev => prev + 1);
       
+      // Schedule notification for when the timer will end
+      if (Platform.OS !== 'web') {
+        await scheduleTimerEndNotification(pouch.id, duration);
+      }
+      
       // Start Live Activity on iOS
       if (Platform.OS === 'ios') {
-        startPouchActivity(pouch.id, duration, duration);
+        await startPouchActivity(pouch.id, "Pouch Timer", duration);
       }
     } catch (err) {
       handleError(err as Error | PostgrestError);
       return;
     }
-
-    setIsActive(true);
-    setIsPaused(false);
   };
 
   const handlePause = () => {
@@ -436,32 +568,38 @@ export default function Dashboard() {
   };
 
   const handleStop = async () => {
-    if (currentPouchId) {
-      try {
-        const { data: pouch, error: pouchError } = await supabase
-          .from('pouches')
-          .update({
-            end_time: new Date().toISOString(),
-            is_active: false,
-            paused_at: null
-          })
-          .eq('id', currentPouchId)
-          .select()
-          .single();
+    if (!currentPouchId) return;
+    
+    try {
+      // Update the pouch in the database
+      const { data: pouch, error: pouchError } = await supabase
+        .from('pouches')
+        .update({
+          end_time: new Date().toISOString(),
+          is_active: false,
+          paused_at: null
+        })
+        .eq('id', currentPouchId)
+        .select()
+        .single();
 
-        if (pouchError) throw pouchError;
-        if (pouch?.end_time) {
-          setLastPouchEndTime(pouch.end_time);
-        }
-        
-        // End Live Activity on iOS
-        if (Platform.OS === 'ios') {
-          endPouchActivity(currentPouchId);
-        }
-      } catch (err) {
-        handleError(err as Error | PostgrestError);
-        return;
+      if (pouchError) throw pouchError;
+      if (pouch?.end_time) {
+        setLastPouchEndTime(pouch.end_time);
       }
+      
+      // Cancel any scheduled notifications for this pouch
+      if (Platform.OS !== 'web') {
+        await cancelPouchNotifications(currentPouchId);
+      }
+      
+      // End Live Activity on iOS
+      if (Platform.OS === 'ios') {
+        await endPouchActivity(currentPouchId, true);
+      }
+    } catch (err) {
+      handleError(err as Error | PostgrestError);
+      return;
     }
 
     setIsActive(false);

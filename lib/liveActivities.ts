@@ -1,5 +1,8 @@
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import * as Notifications from 'expo-notifications';
+
+// Check if the PouchTimerActivity module is available
+const PouchTimerActivity = Platform.OS === 'ios' ? NativeModules.PouchTimerActivity : null;
 
 // Interface for Live Activity data
 interface PouchActivityAttributes {
@@ -16,97 +19,73 @@ const formatTime = (seconds: number): string => {
   return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
 };
 
+// Check if Live Activities are supported
+export const areLiveActivitiesSupported = (): boolean => {
+  if (Platform.OS !== 'ios') return false;
+  
+  // Check if iOS version supports Live Activities (iOS 16.1+)
+  const iosVersion = parseInt(Platform.Version, 10);
+  if (iosVersion < 16.1) return false;
+  
+  // Check if the native module is available
+  if (!PouchTimerActivity) return false;
+  
+  // Check if Live Activities are enabled on the device
+  return PouchTimerActivity.areActivitiesEnabled?.() || false;
+};
+
 // Start a Live Activity for the current pouch
 export const startPouchActivity = async (
   pouchId: string,
-  duration: number,
-  remainingTime: number
-): Promise<boolean> => {
-  if (Platform.OS !== 'ios') return false;
+  pouchName: string,
+  durationMinutes: number
+): Promise<string | null> => {
+  if (!areLiveActivitiesSupported()) {
+    // Fall back to regular notification for non-iOS or unsupported iOS versions
+    await scheduleCompletionNotification(pouchId, durationMinutes);
+    return null;
+  }
   
   try {
-    // Check if iOS version supports Live Activities (iOS 16.1+)
-    const iosVersion = parseInt(Platform.Version, 10);
-    if (iosVersion < 16.1) return false;
+    // Calculate start and end times
+    const startTime = new Date();
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
     
-    // Calculate progress
-    const progress = remainingTime / duration;
+    // Start Live Activity
+    const activityId = await PouchTimerActivity.startActivity(
+      pouchId,
+      pouchName || 'Pouch Timer',
+      startTime,
+      endTime
+    );
     
-    // Prepare content for Live Activity
-    const content = {
-      title: 'Active Pouch',
-      body: `Pouch Timer: ${formatTime(remainingTime)} remaining`,
-      data: {
-        activityType: 'pouch',
-        pouchId,
-        attributes: {
-          remainingTime,
-          duration,
-          progress,
-          isActive: true
-        } as PouchActivityAttributes
-      }
-    };
+    // Also schedule a regular notification as a fallback
+    await scheduleCompletionNotification(pouchId, durationMinutes);
     
-    // Request permission if needed
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      const { status: newStatus } = await Notifications.requestPermissionsAsync();
-      if (newStatus !== 'granted') return false;
-    }
-    
-    // Start Live Activity - using null trigger for immediate delivery
-    await Notifications.scheduleNotificationAsync({
-      content,
-      trigger: null
-    });
-    
-    return true;
+    return activityId;
   } catch (error) {
     console.error('Failed to start Live Activity:', error);
-    return false;
+    
+    // Fall back to regular notification
+    await scheduleCompletionNotification(pouchId, durationMinutes);
+    return null;
   }
 };
 
 // Update an existing Live Activity
 export const updatePouchActivity = async (
   pouchId: string,
-  duration: number,
-  remainingTime: number
+  remainingSeconds: number,
+  isCompleted: boolean = false
 ): Promise<boolean> => {
-  if (Platform.OS !== 'ios') return false;
+  if (!areLiveActivitiesSupported()) return false;
   
   try {
-    // Check if iOS version supports Live Activities (iOS 16.1+)
-    const iosVersion = parseInt(Platform.Version, 10);
-    if (iosVersion < 16.1) return false;
-    
-    // Calculate progress
-    const progress = remainingTime / duration;
-    
-    // Prepare content for Live Activity update
-    const content = {
-      title: 'Active Pouch',
-      body: `Pouch Timer: ${formatTime(remainingTime)} remaining`,
-      data: {
-        activityType: 'pouch',
-        pouchId,
-        attributes: {
-          remainingTime,
-          duration,
-          progress,
-          isActive: true
-        } as PouchActivityAttributes
-      }
-    };
-    
-    // Update Live Activity - using null trigger for immediate delivery
-    await Notifications.scheduleNotificationAsync({
-      content,
-      trigger: null
-    });
-    
-    return true;
+    return await PouchTimerActivity.updateActivity(
+      pouchId,
+      remainingSeconds,
+      isCompleted
+    );
   } catch (error) {
     console.error('Failed to update Live Activity:', error);
     return false;
@@ -114,39 +93,91 @@ export const updatePouchActivity = async (
 };
 
 // End a Live Activity
-export const endPouchActivity = async (pouchId: string): Promise<boolean> => {
-  if (Platform.OS !== 'ios') return false;
+export const endPouchActivity = async (
+  pouchId: string,
+  isCompleted: boolean = true
+): Promise<boolean> => {
+  if (!areLiveActivitiesSupported()) {
+    // Cancel any scheduled notifications
+    await cancelCompletionNotification(pouchId);
+    return false;
+  }
   
   try {
-    // Check if iOS version supports Live Activities (iOS 16.1+)
-    const iosVersion = parseInt(Platform.Version, 10);
-    if (iosVersion < 16.1) return false;
+    // Cancel any scheduled notifications
+    await cancelCompletionNotification(pouchId);
     
-    // Prepare content for ending Live Activity
-    const content = {
-      title: 'Pouch Timer Complete',
-      body: 'Your pouch timer has finished!',
-      data: {
-        activityType: 'pouch',
-        pouchId,
-        attributes: {
-          remainingTime: 0,
-          duration: 0,
-          progress: 0,
-          isActive: false
-        } as PouchActivityAttributes
-      }
-    };
-    
-    // End Live Activity - using null trigger for immediate delivery
-    await Notifications.scheduleNotificationAsync({
-      content,
-      trigger: null
-    });
-    
-    return true;
+    // End the Live Activity
+    return await PouchTimerActivity.endActivity(pouchId, isCompleted);
   } catch (error) {
     console.error('Failed to end Live Activity:', error);
     return false;
+  }
+};
+
+// End all active Live Activities
+export const endAllPouchActivities = async (): Promise<boolean> => {
+  if (!areLiveActivitiesSupported()) return false;
+  
+  try {
+    return await PouchTimerActivity.endAllActivities();
+  } catch (error) {
+    console.error('Failed to end all Live Activities:', error);
+    return false;
+  }
+};
+
+// Schedule a notification for when the pouch timer completes
+// This serves as a fallback for devices that don't support Live Activities
+export const scheduleCompletionNotification = async (
+  pouchId: string,
+  durationMinutes: number
+): Promise<string | null> => {
+  try {
+    // Request permission if needed
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus !== 'granted') return null;
+    }
+    
+    // Schedule notification for when the timer completes
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Pouch Timer Complete',
+        body: 'Your pouch timer has finished!',
+        sound: true,
+        data: { pouchId }
+      },
+      trigger: {
+        seconds: durationMinutes * 60,
+        channelId: 'pouch-timer'
+      }
+    });
+    
+    return notificationId;
+  } catch (error) {
+    console.error('Failed to schedule completion notification:', error);
+    return null;
+  }
+};
+
+// Cancel a scheduled completion notification
+export const cancelCompletionNotification = async (pouchId: string): Promise<void> => {
+  try {
+    // Get all scheduled notifications
+    const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    
+    // Find notifications for this pouch
+    const pouchNotifications = scheduledNotifications.filter(
+      notification => notification.content.data?.pouchId === pouchId
+    );
+    
+    // Cancel each notification
+    for (const notification of pouchNotifications) {
+      await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+    }
+  } catch (error) {
+    console.error('Failed to cancel completion notification:', error);
   }
 };
