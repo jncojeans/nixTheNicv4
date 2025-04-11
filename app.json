@@ -13,6 +13,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kickthenic.app",
       "buildNumber": "24",
+      "appleTeamId": "KKUW8X6QXT",
       "infoPlist": {
         "UIBackgroundModes": [
           "fetch",

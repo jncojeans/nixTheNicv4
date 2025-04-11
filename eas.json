@@ -33,6 +33,24 @@
         "key": "eas-build-ios-cache-v1"
       }
     },
+    "free-ios": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m1-medium",
+        "buildConfiguration": "Release"
+      },
+      "cache": {
+        "key": "eas-build-ios-cache-v1"
+      }
+    },
+    "local-ios": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false,
+        "buildConfiguration": "Release"
+      },
+      "credentialsSource": "local"
+    },
     "xcode-archive": {
       "distribution": "internal",
       "ios": {
