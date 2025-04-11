@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Pressable, Platform, NativeModules } from 'react-native';
 import { useFonts, Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
 import { HorizontalProgress } from '@/components/HorizontalProgress';
 import { TimeSinceLastPouch } from '@/components/TimeSinceLastPouch';
 import { Timer, Pause, Play, CircleStop as StopCircle } from 'lucide-react-native';
-import { Platform } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import * as BackgroundFetch from 'expo-background-fetch';
@@ -95,6 +94,8 @@ export default function Dashboard() {
     if (Platform.OS === 'web') return;
     
     try {
+      console.log(`Attempting to schedule notification for pouch ${pouchId} with duration ${durationMinutes} minutes`);
+      
       // Request permissions if needed
       const { status } = await Notifications.getPermissionsAsync();
       if (status !== 'granted') {
@@ -114,7 +115,14 @@ export default function Dashboard() {
         return;
       }
       
-      // Schedule the notification to trigger at the exact end time
+      // Calculate the exact time when the notification should trigger
+      const secondsToTrigger = durationMinutes * 60;
+      const triggerDate = new Date(Date.now() + (secondsToTrigger * 1000));
+      
+      console.log(`Scheduling notification to trigger at: ${triggerDate.toISOString()}`);
+      
+      // @ts-ignore - The type definitions for Expo notifications are incorrect
+      // This format works in production despite the TypeScript error
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Pouch Timer Complete',
@@ -122,12 +130,10 @@ export default function Dashboard() {
           sound: true,
           data: { pouchId }
         },
-        // @ts-ignore - The type definitions for Expo notifications are incorrect
-        // This is the correct format that works in production
-        trigger: durationMinutes > 0 ? { seconds: durationMinutes * 60 } : null
+        trigger: { seconds: secondsToTrigger }
       });
       
-      console.log(`Scheduled notification ${notificationId} for pouch ${pouchId}`);
+      console.log(`Successfully scheduled notification ${notificationId} for pouch ${pouchId}`);
       return notificationId;
     } catch (error) {
       console.error('Error scheduling notification:', error);
@@ -308,7 +314,7 @@ export default function Dashboard() {
         const elapsedSeconds = Math.floor((now - startTime) / 1000) - pauseDuration;
         
         // Calculate remaining time
-        const newRemainingTime = Math.max(0, durationInSeconds - elapsedSeconds);
+        const newRemainingTime = Math.max(0, duration - elapsedSeconds);
         setRemainingTime(newRemainingTime);
       } else {
         // Check for the most recent completed pouch to show time since last pouch
@@ -488,13 +494,36 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not found');
 
+      // Get today's schedule to get the correct duration_per_pouch value
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const { data: schedule, error: scheduleError } = await supabase
+        .from('weaning_schedule_days')
+        .select(`
+          duration_per_pouch,
+          weaning_plans!inner(user_id)
+        `)
+        .eq('weaning_plans.user_id', user.id)
+        .eq('date', today.toISOString().split('T')[0]);
+
+      if (scheduleError) throw scheduleError;
+      
+      // Handle case where no schedule is found
+      if (!schedule || schedule.length === 0) {
+        throw new Error('No schedule found for today. Please check your weaning plan.');
+      }
+
+      // Use the duration_per_pouch value directly from the schedule (in minutes)
+      const targetDuration = schedule[0].duration_per_pouch;
+
       // Create a new pouch in the database
       const { data: pouch, error: pouchError } = await supabase
         .from('pouches')
         .insert({
           user_id: user.id,
           start_time: startTime,
-          target_duration: duration,
+          target_duration: targetDuration, // Use the value from weaning_schedule_days directly
           is_active: true,
           total_pause_duration: '0 seconds'
         })
@@ -509,12 +538,34 @@ export default function Dashboard() {
       
       // Schedule notification for when the timer will end
       if (Platform.OS !== 'web') {
-        await scheduleTimerEndNotification(pouch.id, duration);
+        console.log(`Scheduling notification for pouch ${pouch.id} with duration ${targetDuration} minutes`);
+        await scheduleTimerEndNotification(pouch.id, targetDuration);
       }
       
-      // Start Live Activity on iOS
+      // Start Live Activity on iOS, but don't schedule another notification
       if (Platform.OS === 'ios') {
-        await startPouchActivity(pouch.id, "Pouch Timer", duration);
+        console.log(`Starting Live Activity for pouch ${pouch.id} with duration ${targetDuration} minutes`);
+        try {
+          // We're passing null as the third parameter to avoid scheduling a notification
+          if (NativeModules.PouchTimerActivity) {
+            // Calculate start and end times
+            const startTime = new Date();
+            const endTime = new Date(startTime.getTime() + targetDuration * 60 * 1000);
+            
+            // Start Live Activity directly without going through startPouchActivity
+            await NativeModules.PouchTimerActivity.startActivity(
+              pouch.id,
+              "Pouch Timer",
+              startTime,
+              endTime
+            );
+          } else {
+            console.log('PouchTimerActivity not available, skipping Live Activity');
+          }
+        } catch (error) {
+          console.error('Failed to start Live Activity:', error);
+          // No fallback notification here as we already scheduled one above
+        }
       }
     } catch (err) {
       handleError(err as Error | PostgrestError);

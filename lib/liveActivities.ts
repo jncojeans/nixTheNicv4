@@ -41,8 +41,9 @@ export const startPouchActivity = async (
   durationMinutes: number
 ): Promise<string | null> => {
   if (!areLiveActivitiesSupported()) {
+    console.log(`Live Activities not supported, falling back to notification for pouch ${pouchId}`);
     // Fall back to regular notification for non-iOS or unsupported iOS versions
-    await scheduleCompletionNotification(pouchId, durationMinutes);
+    // Note: We're not scheduling here anymore as it's handled in index.tsx
     return null;
   }
   
@@ -50,6 +51,8 @@ export const startPouchActivity = async (
     // Calculate start and end times
     const startTime = new Date();
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+    
+    console.log(`Starting Live Activity for pouch ${pouchId} from ${startTime} to ${endTime}`);
     
     // Start Live Activity
     const activityId = await PouchTimerActivity.startActivity(
@@ -59,15 +62,13 @@ export const startPouchActivity = async (
       endTime
     );
     
-    // Also schedule a regular notification as a fallback
-    await scheduleCompletionNotification(pouchId, durationMinutes);
+    // We're no longer scheduling a notification here as it's handled in index.tsx
     
     return activityId;
   } catch (error) {
     console.error('Failed to start Live Activity:', error);
     
-    // Fall back to regular notification
-    await scheduleCompletionNotification(pouchId, durationMinutes);
+    // We're no longer scheduling a notification here as it's handled in index.tsx
     return null;
   }
 };
@@ -133,32 +134,10 @@ export const scheduleCompletionNotification = async (
   pouchId: string,
   durationMinutes: number
 ): Promise<string | null> => {
-  try {
-    // Request permission if needed
-    const { status } = await Notifications.getPermissionsAsync();
-    if (status !== 'granted') {
-      const { status: newStatus } = await Notifications.requestPermissionsAsync();
-      if (newStatus !== 'granted') return null;
-    }
-    
-    // Schedule notification for when the timer completes
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Pouch Timer Complete',
-        body: 'Your pouch timer has finished!',
-        sound: true,
-        data: { pouchId }
-      },
-      // @ts-ignore - The type definitions for Expo notifications are incorrect
-      // This is the correct format that works in production
-      trigger: { seconds: durationMinutes * 60 }
-    });
-    
-    return notificationId;
-  } catch (error) {
-    console.error('Failed to schedule completion notification:', error);
-    return null;
-  }
+  console.log(`DISABLED: Not scheduling completion notification for pouch ${pouchId} from liveActivities.ts`);
+  // This function is now disabled to prevent duplicate notifications
+  // All notification scheduling is handled in index.tsx
+  return null;
 };
 
 // Cancel a scheduled completion notification
