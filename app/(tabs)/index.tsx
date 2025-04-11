@@ -121,15 +121,19 @@ export default function Dashboard() {
       
       console.log(`Scheduling notification to trigger at: ${triggerDate.toISOString()}`);
       
-      // @ts-ignore - The type definitions for Expo notifications are incorrect
-      // This format works in production despite the TypeScript error
+      // Schedule the notification with a format that works in Expo
+      const notificationContent = {
+        title: 'Pouch Timer Complete',
+        body: 'Your pouch timer has finished!',
+        sound: true,
+        data: { pouchId }
+      };
+      
+      // Use a simpler approach that works in Expo
+      // The TypeScript definitions for Expo notifications don't match the actual API
+      // @ts-ignore
       const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Pouch Timer Complete',
-          body: 'Your pouch timer has finished!',
-          sound: true,
-          data: { pouchId }
-        },
+        content: notificationContent,
         trigger: { seconds: secondsToTrigger }
       });
       
@@ -210,8 +214,10 @@ export default function Dashboard() {
           .select('*')
           .eq('user_id', user.id)
           .eq('is_active', true)
-          .is('end_time', null);
-          
+          .is('end_time', null)
+          .order('start_time', { ascending: false })
+          .limit(1);
+
         if (activePouches?.length) {
           for (const pouch of activePouches) {
             const startTime = new Date(pouch.start_time).getTime();

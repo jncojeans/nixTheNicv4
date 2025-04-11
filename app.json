@@ -4,7 +4,7 @@
     "slug": "nixthenic",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/Icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -29,7 +29,7 @@
       "package": "com.kickthenic.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/Icon.png",
         "backgroundColor": "#1a1a1a"
       },
       "permissions": [
@@ -47,7 +47,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/Icon.png",
           "color": "#1a1a1a"
         }
       ],
