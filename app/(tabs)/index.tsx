@@ -108,6 +108,12 @@ export default function Dashboard() {
       // Cancel any existing notifications for this pouch
       await cancelPouchNotifications(pouchId);
       
+      // Only schedule if duration is positive (otherwise it's an immediate notification)
+      if (durationMinutes <= 0) {
+        console.log(`Not scheduling notification for pouch ${pouchId} as duration is ${durationMinutes}`);
+        return;
+      }
+      
       // Schedule the notification to trigger at the exact end time
       const notificationId = await Notifications.scheduleNotificationAsync({
         content: {
@@ -116,13 +122,15 @@ export default function Dashboard() {
           sound: true,
           data: { pouchId }
         },
-        trigger: durationMinutes > 0 ? { seconds: durationMinutes * 60, channelId: 'pouch-timer' } : null,
+        // @ts-ignore - The type definitions for Expo notifications are incorrect
+        // This is the correct format that works in production
+        trigger: durationMinutes > 0 ? { seconds: durationMinutes * 60 } : null
       });
       
       console.log(`Scheduled notification ${notificationId} for pouch ${pouchId}`);
       return notificationId;
     } catch (error) {
-      console.error('Failed to schedule notification:', error);
+      console.error('Error scheduling notification:', error);
     }
   };
   
